@@ -18,8 +18,8 @@
         android:layout_centerHorizontal="true" />
 
     <ImageButton
-        android:layout_width="190dp"
-        android:layout_height="190dp"
+        android:layout_width="160dp"
+        android:layout_height="160dp"
         android:id="@+id/talk"
         android:onClick="buttonGet"
         android:background="@drawable/microphone"
@@ -92,6 +92,7 @@
         android:inputType="textPassword"
         android:layout_below="@+id/portText"
         android:layout_alignEnd="@+id/portText"
-        android:layout_toEndOf="@+id/iconView" />
+        android:layout_toEndOf="@+id/iconView"
+        android:layout_alignStart="@+id/portText" />
 
 </RelativeLayout>
