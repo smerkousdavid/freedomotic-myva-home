@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="VcsDirectoryMappings">
+<<<<<<< HEAD
     <mapping directory="$PROJECT_DIR$/app/src/main/java/tk/pseudonymous/myvahome" vcs="Git" />
+=======
+    <mapping directory="" vcs="Git" />
+>>>>>>> 19322c987ef33ab6b730ded873b1fd8f59f57951
   </component>
 </project>

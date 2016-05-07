@@ -2,8 +2,13 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+<<<<<<< HEAD
       <module fileurl="file://$PROJECT_DIR$/MyvaHome.iml" filepath="$PROJECT_DIR$/MyvaHome.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+=======
+      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/freedomotic.iml" filepath="$PROJECT_DIR$/freedomotic.iml" />
+>>>>>>> 19322c987ef33ab6b730ded873b1fd8f59f57951
     </modules>
   </component>
 </project>
