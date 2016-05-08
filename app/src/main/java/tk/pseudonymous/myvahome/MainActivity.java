@@ -1,5 +1,6 @@
 package tk.pseudonymous.myvahome;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -7,8 +8,10 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Looper;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
+import android.support.annotation.RawRes;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -23,6 +26,7 @@ import android.widget.Toast;
 //import com.google.android.gms.appindexing.AppIndex;
 //import com.google.android.gms.common.api.GoogleApiClient;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -41,10 +45,16 @@ import java.lang.reflect.Array;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
+import java.util.logging.MemoryHandler;
 
 public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
 
@@ -55,7 +65,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static String IP = "192.168.1.122", USER="admin", PASS="admin";
     public static int PORT = 9111;
     public static String rootDir = "";
+    public static InputStream procStream = null;
     public static Socket sock;
+
+    public static boolean runner = false;
     //private GoogleApiClient client;
     public static double lat = 0;
     public static double lng = 0;
@@ -63,8 +76,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static final int CHECK_TTS_AVAILABILITY = 101;
     private static final String TAG = "ActivityTTS";
     public static Bitmap bitmap;
-
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -81,8 +92,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         String permission = "android.permission.INTERNET";
         int result = getApplicationContext().checkCallingOrSelfPermission(permission);
-// Print "true" even though the internet permission is not defined in the manifest file
-        Log.d(this.getClass().getName(), "Internet permission granted: " + (result == PackageManager.PERMISSION_GRANTED));
+        Log.d(this.getClass().getName(), "Internet permission granted: "
+                + (result == PackageManager.PERMISSION_GRANTED));
 
 
         rootDir = getApplicationContext().getFilesDir().getPath()+"/home.properties";
@@ -109,6 +120,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         //client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
     }
+
+
+    /*private InputStream openProc() {
+        return getResources().openRawResource(getResources()
+                .getIdentifier("epc", "raw", getPackageName()));
+    }*/
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -159,14 +176,39 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     }
 
-
     public void onText(String command)
     {
         String toDisplay = "C: " + command;
         infoText.setText(toDisplay);
-        new GetRequest().execute(IP, String.valueOf(PORT), "environments", USER, PASS);
+        Object processed[] = processText(command);
+        new GetRequest().execute(IP, String.valueOf(PORT), String.valueOf(processed[0]),
+                USER, PASS, String.valueOf(processed[1]), String.valueOf(processed[2]));
         //new TcpClient().execute(command);
 
+    }
+
+    public boolean isAfter(String whole, String first, String second) {
+        return (whole.indexOf(first) > whole.indexOf(second));
+    }
+
+    public Object[] processText(String toproc) {
+        Object toRet[] = {"/commands/user", "GET", toproc};
+        if(toproc.contains("shutdown") && toproc.contains("freedomotic")) {
+            if(isAfter(toproc, "freedomotic", "shutdown")) {
+                Log.d("SHUTDOWN", "TRUE");
+                toRet[0] = "/system/exit";
+                toRet[1] = "POST";
+                toRet[2] = "{}";
+            }
+        } else if(toproc.contains("version") && toproc.contains("freedomotic")) {
+            if(isAfter(toproc, "version", "freedomotic")) {
+                Log.d("VERSION", "TRUE");
+                toRet[0] = "/system/info/framework";
+                toRet[1] = "GET";
+                toRet[2] = "{}";
+            }
+        }
+        return toRet;
     }
 
     public static boolean contains(String full, String container)
@@ -314,8 +356,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            String toDisplay = "Loading image...";
-            resultText.setText(toDisplay);
+            Toast.makeText(MainActivity.this, "Loading image...",
+                    Toast.LENGTH_SHORT).show();
+            //String toDisplay = "Loading image...";
+            //resultText.setText(toDisplay);
 
         }
         protected Bitmap doInBackground(String... args) {
@@ -434,17 +478,135 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
-    private class GetRequest extends AsyncTask<String, String, String> {
-        protected String doInBackground(String... urls) {
+    private class GetRequest extends AsyncTask<String, String, String[]> {
+        protected String[] doInBackground(String... urls) {
+            if(!runner && Looper.myLooper() == null) {
+                try {
+                    Looper.prepare();
+                } catch(Throwable ignored){}
+                runner = true;
+            }
+            String toRet[] = {"", "", ""};
             try {
                 publishProgress("Loading...");
-                JSONObject toParse = RESTful.GetJsonBody(urls[0], urls[1],
-                        urls[2], urls[3], urls[4]);
+                Object preParse = null;
+                JSONObject toParse = null;
+                if(Objects.equals(urls[5], "GET")) {
+                     preParse = RESTful.GetJsonBody(urls[0], urls[1],
+                            urls[2], urls[3], urls[4]);
+                } else if(Objects.equals(urls[5], "POST")){
+                    preParse = RESTful.SendGetJsonBody(urls[0], urls[1],
+                            urls[2], urls[3], urls[4], urls[6]);
+                }
+
+                if(preParse != null)
+                {
+                    Log.d("MADE_IT", preParse.toString());
+                    if(Objects.equals(urls[2], "/system/exit")) {
+                        //Turn off the freedomotic framework
+                        toParse = (JSONObject) preParse;
+                        toRet[0] = ((int)toParse.get("status") == 202) ? "Shutdown complete" :
+                                "Shutdown denied";
+                        toRet[1] = toRet[0];
+                        toRet[2] = "http://www.iconarchive.com/download/i89549/" +
+                        "alecive/flatwoken/Apps-Dialog-Shutdown.ico";
+                    } else if(Objects.equals(urls[2], "/system/info/framework")) {
+                        //Get freedomotic information
+                        toParse = (JSONObject) preParse;
+                        toRet[0] = "'" + String.valueOf(toParse.get("FRAMEWORK_VERSION_CODENAME")) +
+                                "' Version: " + String.valueOf(toParse.get("FRAMEWORK_MAJOR")) + "."
+                                + String.valueOf(toParse.get("FRAMEWORK_MINOR"));
+                        toRet[1] = "The current freedomotic release is " + toRet[0];
+                        toRet[2] = "http://riscpi.co.uk/wp-content/uploads/2013/09/" +
+                                "freedomotic_logo.png";
+                    } else {
+                        //Run user commands
+
+                        JSONArray arr;
+                        try {
+                            arr = (JSONArray) preParse;
+                        } catch(Throwable ignored) {
+                            toRet[0] = "ERROR! bad response!";
+                            return toRet;
+                        }
+                        List<String> idRun = new ArrayList<>();
+                        int curNum = 0;
+
+                        String comName = urls[6].toLowerCase()
+                                .replaceAll("[^A-Za-z0-9 ]", " ");//.split(" ");
+                        //Iterate through all commands
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject curr = arr.getJSONObject(i);
+                            //Log.d("KEY", curr.toString());
+
+                            String single = curr.getString("name").toLowerCase()
+                                    .replaceAll("[^A-Za-z0-9 ]", " ");
+                            //Log.d("CURNAME", single);
+                            String names[] = single.split(" ");
+                            boolean pass = true;
+                            for (String name : names) {
+                                //Log.d("VALUE", name);
+                                if(!name.isEmpty()) {
+                                    if (!single.contains(comName)) {
+                                        pass = false;
+                                        //Log.d("failed", "Array failed parsing");
+                                    }
+                                }
+                            }
+
+                            if(pass) {
+                                //Log.d("KEYADDING", single);
+                                String uuidGet = curr.getString("uuid"); //Pull unique uuid commands
+                                idRun.add(curNum, uuidGet);
+                                curNum += 1;
+                            }
+                        }
+
+                        Iterator<?> keys = idRun.iterator();
+                        int failed = 0;
+
+                        while( keys.hasNext() ) {
+                            String key = (String)keys.next();
+                            Log.d("FINALKEYS", key);
+                            JSONObject ret = RESTful.SendGetJsonBody(urls[0], urls[1],
+                                    "/commands/user/" + key + "/run", urls[3], urls[4], urls[6]);
+                            if(ret.getInt("status") < 198 || ret.getInt("status") > 206) {
+                                failed += 1;
+                            }
+                        }
+
+                        if(failed == 0 && curNum != 0) {
+                            if(curNum != 1) {
+                                toRet[0] = "Ran " + String.valueOf(curNum) + " Successful commands";
+                                toRet[1] = toRet[0] + " which include" + urls[6];
+                            } else {
+                                toRet[0] = "Ran " + urls[6];
+                                toRet[1] = toRet[0] + " Successfully";
+                            }
+                            toRet[2] = "http://www.iconsdb.com/icons/preview/green/" +
+                                    "checkmark-xxl.png";
+                        } else if(failed > 0) {
+                            toRet[0] = String.valueOf(curNum - failed) + "\\" +
+                                    String.valueOf(curNum) + " Ran successfully";
+                            toRet[1] = String.valueOf(failed) + " Commands failed out of a total of"
+                                    + " " + String.valueOf(curNum) + " Commands";
+                            toRet[2] = "https://upload.wikimedia.org/wikipedia/commons/3/38/" +
+                                    "Blank_space.png";
+                        } else {
+                            toRet[0] = "User command not found";
+                            toRet[1] = "Command not found!";
+                            toRet[2] = "http://ww2.justanswer.com/uploads/JO/jolinzh/" +
+                                    "2011-5-14_121716_Blank2.64x64.gif";
+                        }
+                    }
+                }
 
 
 
-                return "Made it";
+                return toRet;
             } catch (JSONException e) {
+                Toast.makeText(MainActivity.this, "ERROR: getting response",
+                        Toast.LENGTH_SHORT).show();
                 e.printStackTrace();
                 return null;
             }
@@ -454,16 +616,26 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             resultText.setText(progress[0]);
         }
 
-        protected void onPostExecute(String result) {
-            resultText.setText(result);
+        protected void onPostExecute(String[] result) {
             if(result != null) {
-                OnRecieveTCP(result);
+                //OnRecieveTCP(result);
+                if(!Objects.equals(result[0], "")) resultText.setText(result[0]);
+                if(!Objects.equals(result[1], "")) {
+                    speak.stop();
+                    speak.speak(result[1], TextToSpeech.QUEUE_FLUSH, null);
+                }
+                if(!Objects.equals(result[2], "")) new LoadImage().execute(result[2]);
             }
             else
             {
-                String toDisplay = "ERROR! got nothing";
+                String toDisplay = "ERROR! got no response";
+                new LoadImage().execute("http://ww2.justanswer.com/uploads/JO/jolinzh/" +
+                        "2011-5-14_121716_Blank2.64x64.gif");
+                speak.stop();
+                speak.speak("Freedomotic server must be down", TextToSpeech.QUEUE_FLUSH, null);
                 resultText.setText(toDisplay);
             }
+            runner = false;
         }
     }
 }
