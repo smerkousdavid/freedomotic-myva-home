@@ -478,6 +478,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
+    public String replaceList(String orig) {
+        String first[] = {"living room", "closed", "bed room", "open this", "openers", "lights",
+        "a front end", "simulator plug in", "rooms", "doors"};
+        String second[] = {"livingroom", "close", "bedroom", "openness", "openness", "light",
+        "Jfrontend", "simulator plugin", "room", "door"};
+        for(int a = 0; a < first.length; a++) {
+            orig = orig.replace(first[a], second[a]);
+        }
+        return orig;
+    }
+
+
     private class GetRequest extends AsyncTask<String, String, String[]> {
         protected String[] doInBackground(String... urls) {
             if(!runner && Looper.myLooper() == null) {
@@ -531,8 +543,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                         }
                         List<String> idRun = new ArrayList<>();
                         int curNum = 0;
-
-                        String comName = urls[6].toLowerCase()
+                        urls[6] = replaceList(urls[6].toLowerCase());
+                        String comName = urls[6]
                                 .replaceAll("[^A-Za-z0-9 ]", " ");//.split(" ");
                         //Iterate through all commands
                         for (int i = 0; i < arr.length(); i++) {
@@ -578,7 +590,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                         if(failed == 0 && curNum != 0) {
                             if(curNum != 1) {
                                 toRet[0] = "Ran " + String.valueOf(curNum) + " Successful commands";
-                                toRet[1] = toRet[0] + " which include" + urls[6];
+                                toRet[1] = toRet[0] + " which includes " + urls[6];
                             } else {
                                 toRet[0] = "Ran " + urls[6];
                                 toRet[1] = toRet[0] + " Successfully";
